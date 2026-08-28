@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CAN·FD·UDS">
+  <title>CAN · CAN FD · UDS</title>
+  <!-- Brand tile — indigo 600, matches --c-brand in css/styles.css -->
+  <rect width="64" height="64" rx="14" fill="#4f46e5"/>
+  <g fill="#ffffff">
+    <!-- Pins: top / bottom / left / right -->
+    <rect x="21" y="8"  width="5" height="9" rx="2"/>
+    <rect x="38" y="8"  width="5" height="9" rx="2"/>
+    <rect x="21" y="47" width="5" height="9" rx="2"/>
+    <rect x="38" y="47" width="5" height="9" rx="2"/>
+    <rect x="8"  y="21" width="9" height="5" rx="2"/>
+    <rect x="8"  y="38" width="9" height="5" rx="2"/>
+    <rect x="47" y="21" width="9" height="5" rx="2"/>
+    <rect x="47" y="38" width="9" height="5" rx="2"/>
+    <!-- Chip body -->
+    <rect x="15" y="15" width="34" height="34" rx="7"/>
+  </g>
+  <!-- Core -->
+  <rect x="25" y="25" width="14" height="14" rx="3" fill="#4f46e5"/>
+</svg>
