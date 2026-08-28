@@ -10,7 +10,15 @@
     B: "Body — thân xe (túi khí, điều hòa, ghế…)",
     U: "Network — mạng giao tiếp (CAN/LIN…)"
   };
-  var GROUP2 = { "0":"chuẩn hóa bởi SAE (ISO/SAE controlled)", "1":"do nhà sản xuất định nghĩa (manufacturer)", "2":"tùy loại", "3":"tùy loại" };
+  // Meaning of digit 1 (the 2-bit field) depends on the letter — J2012 gives
+  // the P range its own split, and reserves x3 for C/B/U.
+  var CBU2 = { 0:"ISO/SAE chuẩn hóa", 1:"do nhà sản xuất định nghĩa", 2:"do nhà sản xuất định nghĩa", 3:"dành riêng (reserved)" };
+  var GROUP2 = {
+    P: { 0:"ISO/SAE chuẩn hóa", 1:"do nhà sản xuất định nghĩa", 2:"ISO/SAE chuẩn hóa",
+         3:"dùng chung — P30xx–P33xx do nhà sản xuất, P34xx–P39xx theo ISO/SAE" },
+    C: CBU2, B: CBU2, U: CBU2
+  };
+  function group2(letter, d1) { return (GROUP2[letter] || CBU2)[d1] || ""; }
   // status bit meaning (ISO 14229-1, DTC status byte)
   var STATUS_BITS = [
     "testFailed — lần test gần nhất bị lỗi",
@@ -71,7 +79,7 @@
 '<div class="field" style="flex:0 0 90px"><label>Nhóm</label><select class="select" id="dtc-letter">' +
 LETTER.map(function(l){return '<option value="'+l+'"'+(l==="P"?" selected":"")+'>'+l+'</option>';}).join('') +
 '</select></div>' +
-'<div class="field"><label>3 ký tự hex còn lại</label><input class="input" id="dtc-rest" value="301" spellcheck="false" placeholder="301"></div>' +
+'<div class="field"><label>4 chữ số hex còn lại <span class="hint">(chữ số 1 chỉ 0–3)</span></label><input class="input" id="dtc-rest" value="0301" maxlength="4" spellcheck="false" placeholder="0301"></div>' +
 '</div>' +
 '<div id="dtc-enc"></div>' +
 '</div></div>' +
@@ -102,7 +110,19 @@ LETTER.map(function(l){return '<option value="'+l+'"'+(l==="P"?" selected":"")+'
     init: function (root) {
       var $ = function (s) { return root.querySelector(s); };
 
-      function bytesOf(str){ return (str.match(/[0-9a-fA-F]{1,2}/g)||[]).map(function(x){return parseInt(x,16)&0xff;}); }
+      // Split on any non-hex run, then read each token in byte pairs. An
+      // odd-length token is left-padded, so "301" reads as 03 01 — the old
+      // regex chopped it left-to-right into 30 01, which decoded to a
+      // completely different DTC.
+      function bytesOf(str){
+        var toks = String(str||"").replace(/0x/gi, " ").match(/[0-9a-fA-F]+/g) || [];
+        var out = [];
+        toks.forEach(function (t) {
+          if (t.length % 2) t = "0" + t;
+          for (var i = 0; i < t.length; i += 2) out.push(parseInt(t.substr(i, 2), 16) & 0xff);
+        });
+        return out;
+      }
 
       // ---- decode hex → code ----
       function renderDecode() {
@@ -117,7 +137,7 @@ LETTER.map(function(l){return '<option value="'+l+'"'+(l==="P"?" selected":"")+'
           '<div class="hex-out" style="font-size:26px">'+d.code+'</div></div>' +
           '<table class="data"><tbody>' +
           row("Nhóm", d.letter+" — "+LETTER_NAME[d.letter]) +
-          row("Chữ số 1", d.d1 + " ("+(GROUP2[String(d.d1)]||"")+")") +
+          row("Chữ số 1", d.d1 + " ("+group2(d.letter, d.d1)+")") +
           row("16 bit", "0x"+v.toString(16).toUpperCase().padStart(4,"0")+"  =  "+v.toString(2).padStart(16,"0").replace(/(.{4})/g,"$1 ").trim()) +
           (ftb!==null ? row("FTB (byte 3)", "0x"+hx2(ftb)+" — Failure Type Byte (kiểu lỗi chi tiết)") : "") +
           '</tbody></table>';
@@ -126,23 +146,39 @@ LETTER.map(function(l){return '<option value="'+l+'"'+(l==="P"?" selected":"")+'
       // ---- build code → hex ----
       function renderEncode() {
         var letter = $("#dtc-letter").value;
-        var rest = ($("#dtc-rest").value||"").replace(/[^0-9a-fA-F]/g,"").toUpperCase().slice(0,3);
+        var rest = ($("#dtc-rest").value||"").replace(/[^0-9a-fA-F]/g,"").toUpperCase().slice(0,4);
         $("#dtc-rest").value = rest;
         var enc = $("#dtc-enc");
-        if (rest.length < 3) { enc.innerHTML = '<div class="callout warn">'+co("alert")+'<div class="callout-body"><p>Nhập đủ 3 ký tự hex (vd <code>301</code>).</p></div></div>'; return; }
+        var input = $("#dtc-rest");
+        input.classList.remove("invalid");
+        if (rest.length < 4) {
+          input.classList.add("invalid");
+          enc.innerHTML = '<div class="callout warn">'+co("alert")+'<div class="callout-body"><p>Nhập đủ <strong>4</strong> chữ số hex (vd <code>0301</code> → P0301). Mã DTC luôn có 4 chữ số sau chữ cái.</p></div></div>';
+          return;
+        }
+        var d1 = parseInt(rest[0], 16);
+        if (d1 > 3) {
+          // Reject rather than clamp: silently turning 7301 into 3301 would
+          // teach the wrong bit layout.
+          input.classList.add("invalid");
+          enc.innerHTML = '<div class="callout danger">'+co("alert")+'<div class="callout-body"><p>Chữ số đầu tiên là <strong>'+rest[0]+'</strong> — không hợp lệ. Trường này chỉ có <strong>2 bit</strong> (bit 13–12) nên chỉ nhận <code>0</code>, <code>1</code>, <code>2</code>, <code>3</code>.</p></div></div>';
+          return;
+        }
         var li = LETTER.indexOf(letter);
-        var d1 = parseInt(rest[0],16);
-        if (d1 > 3) d1 = 3; // chữ số 1 chỉ 0–3
-        var v = (li<<14) | ((d1&0x3)<<12) | (parseInt(rest[1],16)<<8) | (parseInt(rest[2],16)<<4) | 0;
-        // note: J2012 mã đầy đủ 4 chữ số; ở đây "301" = d1 d2 d3, d4=0. Cho phép nhập 4 ký tự?
-        // Dùng đúng 16-bit: high byte, low byte
-        var full = (li<<14)|((d1&0x3)<<12)|(parseInt(rest[1],16)<<8)|(parseInt(rest[2],16)<<4);
+        var full = (li << 14) | (d1 << 12) | (parseInt(rest[1],16) << 8) | (parseInt(rest[2],16) << 4) | parseInt(rest[3],16);
         var hi = (full>>>8)&0xff, lo = full & 0xff;
         var back = decode(full);
+        var bin = full.toString(2).padStart(16,"0");
         enc.innerHTML =
           '<div class="result-box out"><div class="rb-label">Byte gửi trên bus</div>' +
           '<div class="hex-out" style="font-size:22px">'+hx2(hi)+' '+hx2(lo)+'</div>' +
-          '<p class="muted" style="margin-top:8px;font-size:13px">Giải mã ngược: <strong>'+back.code+'</strong></p></div>';
+          '<p class="muted" style="margin-top:8px;font-size:13px">Giải mã ngược: <strong>'+back.code+'</strong>'+
+          (back.code === letter + rest ? ' ✓' : ' ⚠ khác với mã bạn nhập')+'</p></div>' +
+          '<table class="data"><tbody>' +
+          row("Nhóm", bin.slice(0,2)+"b → "+letter) +
+          row("Chữ số 1", bin.slice(2,4)+"b → "+d1+" ("+group2(letter, d1)+")") +
+          row("Chữ số 2–4", bin.slice(4,8)+" "+bin.slice(8,12)+" "+bin.slice(12,16)+"b → "+rest.slice(1)) +
+          '</tbody></table>';
       }
 
       // ---- status byte ----

@@ -729,9 +729,29 @@ pre.code .s { color: var(--c-green); }
 .log-line.rx .log-dir { color: var(--c-green); }
 .log-line.err .log-dir { color: var(--c-red); }
 .log-line.sys .log-dir { color: var(--text-muted); }
+.log-line.pnd .log-dir { color: var(--c-amber); }
 .log-line .log-msg { min-width: 0; word-break: break-word; }
 .log-hex { color: var(--c-brand-strong); font-weight: 500; }
 .log-note { color: var(--text-muted); margin-top: 2px; }
+
+/* The ISO-TP layer under a UDS line: what actually goes on the wire once the
+   PDU is segmented. Indented and dimmed so the UDS message stays the headline
+   and the CAN frames read as a footnote to it. */
+.log-frames {
+  margin: 6px 0 2px; padding-left: 10px;
+  border-left: 2px solid var(--border);
+  font-size: var(--fs-xs); color: var(--text-muted);
+}
+.lf-row { display: flex; gap: 10px; padding: 1px 0; }
+.lf-id { flex: 0 0 46px; color: var(--c-purple); }
+.lf-t  { flex: 0 0 26px; font-weight: 600; }
+.lf-b  { flex: 0 0 auto; color: var(--text-soft); }
+.lf-n  { font-family: var(--font-sans); opacity: .8; }
+.console.hide-frames .log-frames { display: none; }
+@media (max-width: 560px) {
+  .lf-row { flex-wrap: wrap; gap: 4px 10px; }
+  .lf-n { flex: 1 0 100%; }
+}
 
 /* A result block sits inside a .lab-panel that already has a border and a
    titled head. Wrapping it in a second filled, bordered box was box-in-box —
@@ -778,7 +798,12 @@ pre.code .s { color: var(--c-green); }
    is sized to the three hex characters it accepts instead of stretching to
    640px, which read as an invitation to type a paragraph. */
 .node-head, .node-row {
-  display: grid; grid-template-columns: 150px 160px 36px; gap: 10px; align-items: center;
+  display: grid; grid-template-columns: 150px 110px 165px 36px; gap: 10px; align-items: center;
+}
+@media (max-width: 560px) {
+  .node-head { display: none; }
+  .node-row { grid-template-columns: 1fr 1fr; }
+  .node-row + .node-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 }
 .node-head {
   font-size: var(--fs-sm); font-weight: 500; color: var(--text-muted);

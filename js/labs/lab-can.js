@@ -181,7 +181,7 @@
 
         render({
           isExt: isExt, idVal: idVal, idInvalid: idInvalid, isRemote: isRemote,
-          nBytes: nBytes, dataBytes: dataBytes, crc: crc, crcBits: crcBits,
+          code: code, nBytes: nBytes, dataBytes: dataBytes, crc: crc, crcBits: crcBits,
           regionField: region, stuffedRegion: st, trailer: trailer,
           stuffedCount: st.stuffed, totalBits: totalBits, timeUs: timeUs, maxId: maxId
         });
@@ -207,11 +207,13 @@
         }).join("");
 
         var idHex = "0x" + m.idVal.toString(16).toUpperCase().padStart(m.isExt ? 8 : 3, "0");
-        var dataHex = m.isRemote ? "(remote — no data)" : (m.dataBytes.length ? m.dataBytes.map(function (b) { return b.toString(16).toUpperCase().padStart(2,"0"); }).join(" ") : "(rỗng)");
+        var dataHex = m.isRemote
+          ? "(Remote Frame — DLC vẫn được gửi, nhưng không có Data field)"
+          : (m.dataBytes.length ? m.dataBytes.map(function (b) { return b.toString(16).toUpperCase().padStart(2,"0"); }).join(" ") : "(rỗng)");
 
         summary.textContent = m.totalBits + " bit · " + m.timeUs.toFixed(1) + " µs";
 
-        var warn = m.idInvalid ? '<div class="callout danger" style="margin-bottom:14px">'+co("alert")+'<div class="callout-body"><p>Identifier vượt giá trị tối đa ('+("0x"+m.maxId.toString(16).toUpperCase())+'). Đã cắt bớt (mask) cho vừa.</p></div></div>' : "";
+        var warn = m.idInvalid ? '<div class="callout danger" style="margin-bottom:14px">'+co("alert")+'<div class="callout-body"><p>Identifier vượt giá trị tối đa ('+("0x"+m.maxId.toString(16).toUpperCase())+'). Đã lấy phần dư cho vừa — kết quả bên dưới ứng với ID <strong>'+APP.esc(idHex)+'</strong>, không phải giá trị bạn nhập.</p></div></div>' : "";
 
         out.innerHTML =
           warn +
@@ -219,8 +221,9 @@
           '<table class="data" style="border:none"><tbody>' +
           row("Định dạng", m.isExt ? "Extended (29-bit)" : "Standard (11-bit)") +
           row("Identifier", idHex + (m.isExt?"":"")) +
-          row("Loại", m.isRemote ? "Remote Frame" : "Data Frame") +
-          row("DLC", m.nBytes + " byte") +
+          row("Loại", m.isRemote ? "Remote Frame (RTR = 1)" : "Data Frame (RTR = 0)") +
+          row("DLC", "mã " + m.code + " (" + bits(m.code,4).join("") + ") → " +
+              m.nBytes + " byte" + (m.code > 8 ? "  · mã 9–15 đều = 8 byte" : "")) +
           row("Data", dataHex) +
           row("CRC-15", "0x" + m.crc.toString(16).toUpperCase().padStart(4,"0") + " (" + m.crcBits.join("") + ")") +
           '</tbody></table></div>' +
@@ -242,22 +245,35 @@
       function stat(v, l) { return '<div><div class="hex-out">'+v+'</div><div class="muted" style="font-size:12px">'+l+'</div></div>'; }
 
       // events
+      var bytesField = $("#cf-bytes-field");
+      function idMaxChars() { return fmt.value === "ext" ? 8 : 3; }
+      function clampId() {
+        id.value = id.value.replace(/[^0-9a-fA-F]/g, "").toUpperCase().slice(0, idMaxChars());
+      }
+      function syncRemote() {
+        // DLC stays enabled on purpose: a Remote Frame transmits DLC too.
+        bytesField.style.display = rtr.checked ? "none" : "";
+      }
+
       fmt.addEventListener("change", function () {
         id.value = fmt.value === "ext" ? "18DAF110" : "123";
+        id.setAttribute("maxlength", idMaxChars());
+        clampId(); build();
       });
-      dlc.addEventListener("change", buildByteInputs);
-      id.addEventListener("input", function () { id.value = id.value.replace(/[^0-9a-fA-F]/g, "").toUpperCase(); });
-      rtr.addEventListener("change", function () { dlc.disabled = rtr.checked; });
+      dlc.addEventListener("change", function () { buildByteInputs(); build(); });
+      id.addEventListener("input", clampId);
+      rtr.addEventListener("change", function () { syncRemote(); build(); });
       $("#cf-build").addEventListener("click", build);
       $("#cf-rand").addEventListener("click", function () {
-        // vary by using current time-independent counter through DOM
-        var r = function (max) { return Math.floor((performance.now() * (1 + Math.random())) % max); };
-        id.value = (fmt.value === "ext" ? r(0x1fffffff) : r(0x7ff)).toString(16).toUpperCase();
-        var n = 1 + r(8); dlc.value = n; buildByteInputs();
+        var r = function (max) { return Math.floor(Math.random() * max); };
+        id.value = (fmt.value === "ext" ? r(0x20000000) : r(0x800)).toString(16).toUpperCase();
+        dlc.value = String(r(9)); buildByteInputs();
         bytesWrap.querySelectorAll(".byte-box").forEach(function (b) { b.value = r(256).toString(16).toUpperCase().padStart(2,"0"); });
         build();
       });
 
+      id.setAttribute("maxlength", idMaxChars());
+      syncRemote();
       buildByteInputs();
       build();
     }

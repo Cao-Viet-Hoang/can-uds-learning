@@ -40,7 +40,7 @@ Object.keys(DLC_MAP).map(function(k){return '<option value="'+k+'"'+(+k===15?' s
 '</div>' +
 
 '<div class="callout info">' + co("info") +
-'<div class="callout-body"><p>Ước lượng số bit chỉ mang tính minh họa: phần header (arbitration + control) và trailer (CRC/ACK/EOF) được tính ở nominal bitrate, còn phần dữ liệu (nếu bật BRS) tính ở data bitrate. Thực tế còn có stuff bit và fixed stuff bit trong CAN FD nên con số thật sẽ dao động.</p></div></div>' +
+'<div class="callout-body"><p>Cách tính: khi bật BRS, tốc độ đổi <strong>ngay tại bit BRS</strong> — nên ESI, DLC, Data, Stuff Count và CRC chạy ở data bitrate, rồi quay về nominal <strong>từ CRC delimiter</strong> trở đi. Các <em>fixed stuff bit</em> (1 bit trước Stuff Count + 1 bit sau mỗi 4 bit CRC) là cố định nên đã được cộng sẵn. Còn <em>dynamic stuff bit</em> phụ thuộc mẫu bit thực tế nên chỉ nêu khoảng.</p></div></div>' +
 
 '<div class="callout spec">' + co("book") +
 '<div class="callout-body"><div class="callout-title">Ôn lại lý thuyết</div><p>Xem <a href="#canfd">CAN FD — Tổng quan</a>.</p></div></div>' +
@@ -61,27 +61,69 @@ Object.keys(DLC_MAP).map(function(k){return '<option value="'+k+'"'+(+k===15?' s
         var data = parseInt($("#fd-data").value, 10);
         var crcLen = bytes > 16 ? 21 : 17;
 
-        // rough bit budget (standard FD frame)
-        var headerBits = 1 /*SOF*/ + 11 /*ID*/ + 1 /*RRS*/ + 1 /*IDE*/ + 1 /*FDF*/ + 1 /*BRS*/ + 1 /*ESI*/ + 4 /*DLC*/;
-        var dataBits = bytes * 8;
-        var crcBits = crcLen + 1 /*delim*/ + (bytes > 16 ? 6 : 5) /*stuff count area approx*/;
-        var trailerBits = 2 /*ACK*/ + 7 /*EOF*/ + 3 /*IFS*/;
+        // ---- Exact field sizes of a standard (11-bit) CAN FD frame ----------
+        // Split by phase: with BRS the bit rate switches at the BRS bit (so ESI
+        // onward runs at the data rate) and switches back at the CRC delimiter.
+        // Fixed stuff bits: one before the Stuff Count field, then one after
+        // every 4 bits of the CRC sequence. These are deterministic.
+        var fixedStuff = 1 + Math.floor(crcLen / 4);
 
-        // time: header at nominal; data+crc at data rate if BRS else nominal
+        var NOM_PRE = [                       // SOF .. BRS — always nominal
+          ["SOF", 1], ["Identifier", 11], ["RRS", 1], ["IDE", 1],
+          ["FDF", 1], ["res", 1], ["BRS", 1]
+        ];
+        var FAST = [                          // ESI .. CRC — data rate if BRS
+          ["ESI", 1], ["DLC", 4], ["Data field", bytes * 8],
+          ["Stuff Count (3-bit gray + parity)", 4],
+          ["CRC-" + crcLen, crcLen],
+          ["Fixed stuff bit", fixedStuff]
+        ];
+        var NOM_POST = [                      // CRC delimiter .. IFS — nominal
+          ["CRC delimiter", 1], ["ACK slot", 1], ["ACK delimiter", 1],
+          ["EOF", 7], ["IFS", 3]
+        ];
+        var sum = function (rows) { return rows.reduce(function (a, x) { return a + x[1]; }, 0); };
+
+        var nomBits  = sum(NOM_PRE) + sum(NOM_POST);
+        var fastBits = sum(FAST);
+        var totalBits = nomBits + fastBits;
+
+        // Dynamic stuff bits depend on the actual bit pattern, which this lab
+        // does not have (only the payload size is chosen) — so report a bound
+        // instead of inventing a number. Dynamic stuffing covers SOF..Stuff
+        // Count; worst case is one stuff bit per 4 original bits.
+        var dynRegion = sum(NOM_PRE) + 1 + 4 + bytes * 8 + 4;
+        var dynMax = Math.floor((dynRegion - 1) / 4);
+
         var fastRate = brs ? data : nom;
-        var tHeader = headerBits / nom;
-        var tData = (dataBits + crcBits) / fastRate;
-        var tTrailer = trailerBits / nom;
-        var totalUs = (tHeader + tData + tTrailer) * 1e6;
-        var totalBits = headerBits + dataBits + crcBits + trailerBits;
+        var totalUs = (nomBits / nom + fastBits / fastRate) * 1e6;
 
-        // classical CAN comparison: how many 8-byte classical frames needed
-        var classicalFrames = Math.max(1, Math.ceil(bytes / 8));
-        // approx classical frame time (8 byte) at nominal: ~ (44 overhead + 64 data) bits
-        var classicalBitsPer = 44 + 64;
-        var classicalUs = classicalFrames * (classicalBitsPer / nom) * 1e6;
+        // ---- Classical CAN carrying the same payload, via ISO-TP -----------
+        // A classical frame maxes out at 8 data bytes, so anything over 7 has
+        // to be segmented: 1 First Frame (6 payload bytes) + Consecutive Frames
+        // (7 each), and the receiver answers with one Flow Control frame.
+        // Every frame is padded to DLC 8, so each costs 47 + 64 bits incl. IFS.
+        var CLASSIC_BITS = 47 + 64;
+        var cfCount = bytes <= 7 ? 0 : Math.ceil((bytes - 6) / 7);
+        var dataFrames = bytes <= 7 ? 1 : 1 + cfCount;
+        var fcFrames = bytes <= 7 ? 0 : 1;
+        var classicalFrames = dataFrames + fcFrames;
+        var classicalBits = classicalFrames * CLASSIC_BITS;
+        var classicalUs = (classicalBits / nom) * 1e6;
+        var segNote = bytes <= 7
+          ? "1 Single Frame"
+          : "1 First Frame (6 byte) + " + cfCount + " Consecutive Frame (7 byte) + 1 Flow Control";
 
         var idVal = (parseInt($("#fd-id").value || "0", 16) & 0x7ff).toString(16).toUpperCase().padStart(3,"0");
+
+        function fieldRows(rows, phase) {
+          return rows.filter(function (x) { return x[1] > 0; }).map(function (x) {
+            return '<tr><td style="font-family:var(--font-sans)">'+x[0]+'</td>' +
+                   '<td class="mono" style="width:60px;text-align:right">'+x[1]+'</td>' +
+                   '<td style="width:96px;font-family:var(--font-sans);color:var(--text-muted);font-size:13px">'+phase+'</td></tr>';
+          }).join("");
+        }
+        var fastPhase = brs ? "data rate" : "nominal";
 
         out.innerHTML =
           '<div class="result-box"><div class="rb-label">Khung CAN FD</div>' +
@@ -94,17 +136,36 @@ Object.keys(DLC_MAP).map(function(k){return '<option value="'+k+'"'+(+k===15?' s
           r("CRC", "CRC-"+crcLen+(bytes>16?" (payload > 16 byte)":" (payload ≤ 16 byte)")) +
           '</tbody></table></div>' +
 
-          '<div class="result-box"><div class="rb-label">Ước lượng thời lượng</div>' +
-          '<div style="display:flex;gap:22px;flex-wrap:wrap">' +
-          stat("~"+totalBits, "bit") + stat("~"+totalUs.toFixed(1)+" µs", "1 khung FD") +
-          '</div></div>' +
+          '<div class="result-box"><div class="rb-label">Ngân sách bit từng trường</div>' +
+          '<div class="table-wrap"><table class="data"><thead><tr><th>Trường</th><th style="text-align:right">bit</th><th>Pha</th></tr></thead><tbody>' +
+          fieldRows(NOM_PRE, "nominal") +
+          fieldRows(FAST, fastPhase) +
+          fieldRows(NOM_POST, "nominal") +
+          '<tr><td style="font-family:var(--font-sans);font-weight:600">Tổng (cố định)</td>' +
+          '<td class="mono" style="text-align:right;font-weight:700">'+totalBits+'</td><td></td></tr>' +
+          '<tr><td style="font-family:var(--font-sans);color:var(--text-muted)">Dynamic stuff bit (phụ thuộc dữ liệu)</td>' +
+          '<td class="mono" style="text-align:right;color:var(--text-muted)">0–'+dynMax+'</td>' +
+          '<td style="font-family:var(--font-sans);color:var(--text-muted);font-size:13px">'+fastPhase+'</td></tr>' +
+          '</tbody></table></div></div>' +
 
-          '<div class="result-box"><div class="rb-label">So với Classical CAN</div>' +
-          '<p style="font-family:var(--font-sans);font-size:14px;color:var(--text-soft);margin-bottom:10px">Để chở '+bytes+' byte, Classical CAN (8 byte/khung) cần <strong>'+classicalFrames+' khung</strong>.</p>' +
+          '<div class="result-box"><div class="rb-label">Thời lượng</div>' +
+          '<div style="display:flex;gap:22px;flex-wrap:wrap">' +
+          stat("≥ "+totalBits, "bit") + stat("≥ "+totalUs.toFixed(1)+" µs", "1 khung FD") +
+          '</div>' +
+          '<p style="font-family:var(--font-sans);font-size:13px;color:var(--text-muted);margin-top:10px">Dấu “≥” vì chưa cộng dynamic stuff bit — số bit thật nằm trong khoảng '+totalBits+'–'+(totalBits+dynMax)+'.</p>' +
+          '</div>' +
+
+          '<div class="result-box"><div class="rb-label">So với Classical CAN (qua ISO-TP)</div>' +
+          '<p style="font-family:var(--font-sans);font-size:14px;color:var(--text-soft);margin-bottom:10px">Để chở '+bytes+' byte, Classical CAN cần <strong>'+classicalFrames+' khung</strong>: '+segNote+'.</p>' +
           '<div style="display:flex;gap:22px;flex-wrap:wrap">' +
           stat(classicalFrames+"×", "khung classical") + stat("~"+classicalUs.toFixed(1)+" µs", "tổng classical") +
           '</div>' +
-          (bytes > 8 ? '<div class="callout tip">'+co("zap")+'<div class="callout-body"><p>CAN FD gói trọn trong <strong>1 khung</strong> và'+(brs?' chạy nhanh phần dữ liệu →':'') +' hiệu quả hơn '+ (classicalUs/totalUs).toFixed(1) +'× về thời gian trong ví dụ này.</p></div></div>' : '') +
+          (bytes > 7
+            ? '<div class="callout tip">'+co("zap")+'<div class="callout-body"><p>CAN FD gói trọn trong <strong>1 khung</strong>'+(brs?' và chạy nhanh phần dữ liệu':'')+' → nhanh hơn khoảng <strong>'+ (classicalUs/totalUs).toFixed(1) +'×</strong>. Con số này còn <em>chưa</em> tính STmin (thời gian nghỉ giữa các Consecutive Frame) mà Flow Control yêu cầu, nên thực tế khoảng cách còn lớn hơn.</p></div></div>'
+            : '<div class="callout info">'+co("info")+'<div class="callout-body"><p>Với ≤ 7 byte, cả hai đều gửi trong 1 khung — CAN FD chỉ nhanh hơn nếu bật BRS.</p></div></div>') +
+          (bytes > 62
+            ? '<div class="callout warn">'+co("alert")+'<div class="callout-body"><p>Lưu ý: ISO-TP Single Frame trên CAN FD chở tối đa <strong>62 byte</strong> (header 2 byte). Payload 64 byte vì thế vẫn phải chia FF + CF ở tầng ISO-TP, dù khung FD chở được 64 byte dữ liệu.</p></div></div>'
+            : '') +
           '</div>';
       }
       function r(k,v){return '<tr><td style="width:120px;color:var(--text-muted)">'+k+'</td><td class="mono"><strong>'+APP.esc(v)+'</strong></td></tr>';}
