@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Học CAN, CAN FD và UDS từ cơ bản đến nâng cao với lý thuyết chi tiết và mô phỏng tương tác." />
+  <title>CAN · CAN FD · UDS — Học tương tác</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234f46e5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='4' width='16' height='16' rx='2'/%3E%3Cpath d='M9 9h6v6H9z'/%3E%3Cpath d='M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <!-- Skip link for a11y -->
+  <a href="#content" class="skip-link">Bỏ qua tới nội dung</a>
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <button class="icon-btn menu-toggle" id="menuToggle" aria-label="Mở/đóng menu" aria-expanded="false">
+      <span data-icon="menu"></span>
+    </button>
+    <a class="brand" href="#intro">
+      <span class="brand-mark" data-icon="chip"></span>
+      <span class="brand-text">
+        <strong>CAN·FD·UDS</strong>
+        <em>Học tương tác</em>
+      </span>
+    </a>
+    <div class="topbar-spacer"></div>
+    <div class="search-wrap">
+      <span data-icon="search" class="search-icon"></span>
+      <input type="search" id="searchBox" class="search-box" placeholder="Tìm chủ đề… (vd: arbitration, NRC)" aria-label="Tìm kiếm chủ đề" autocomplete="off" />
+      <div class="search-results" id="searchResults" role="listbox" hidden></div>
+    </div>
+    <button class="icon-btn" id="themeToggle" aria-label="Đổi giao diện sáng/tối">
+      <span data-icon="sun" class="theme-icon-light"></span>
+      <span data-icon="moon" class="theme-icon-dark"></span>
+    </button>
+  </header>
+
+  <div class="layout">
+    <!-- Sidebar navigation -->
+    <nav class="sidebar" id="sidebar" aria-label="Điều hướng chính">
+      <div class="sidebar-inner" id="navTree"><!-- built by JS --></div>
+      <div class="sidebar-footer">
+        <span data-icon="info"></span>
+        <span>Nguồn: ISO 11898-1, ISO 14229, ISO 15765-2, Bosch, SAE J2012</span>
+      </div>
+    </nav>
+    <div class="scrim" id="scrim" hidden></div>
+
+    <!-- Main content -->
+    <main class="main" id="content" tabindex="-1">
+      <!-- Reading progress bar -->
+      <div class="progress-rail"><div class="progress-fill" id="progressFill"></div></div>
+      <article class="page" id="page"><!-- rendered by JS --></article>
+      <nav class="pager" id="pager" aria-label="Chuyển trang"></nav>
+    </main>
+  </div>
+
+  <!-- Core -->
+  <script src="js/app.js"></script>
+  <!-- Content -->
+  <script src="js/content/intro.js"></script>
+  <script src="js/content/can-basics.js"></script>
+  <script src="js/content/can-physical.js"></script>
+  <script src="js/content/can-frame.js"></script>
+  <script src="js/content/can-arbitration.js"></script>
+  <script src="js/content/can-errors.js"></script>
+  <script src="js/content/canfd.js"></script>
+  <script src="js/content/uds-intro.js"></script>
+  <script src="js/content/uds-format.js"></script>
+  <script src="js/content/uds-services.js"></script>
+  <script src="js/content/uds-security.js"></script>
+  <script src="js/content/isotp.js"></script>
+  <!-- Labs -->
+  <script src="js/labs/lab-can.js"></script>
+  <script src="js/labs/lab-arbitration.js"></script>
+  <script src="js/labs/lab-canfd.js"></script>
+  <script src="js/labs/lab-uds.js"></script>
+  <script src="js/labs/lab-dtc.js"></script>
+  <!-- Boot last -->
+  <script src="js/boot.js"></script>
+</body>
+</html>
