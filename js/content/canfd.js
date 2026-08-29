@@ -7,7 +7,7 @@
   APP.register("canfd", {
     title: "CAN FD — Tổng quan",
     icon: "zap",
-    keywords: "can fd flexible data rate 64 byte brs fdf edl esi crc17 crc21 bit rate switch tocdo bosch 2012 iso 11898-1 2015",
+    keywords: "can fd flexible data rate 64 byte brs fdf edl esi rrs res crc17 crc21 bit rate switch tocdo bosch 2012 iso 11898-1 2015",
     render: function () {
       return (
 '<span class="page-eyebrow">' + I("zap") + 'CAN FD</span>' +
@@ -42,7 +42,9 @@
 
 '<h2><span class="h2-num">4</span>Các bit điều khiển mới</h2>' +
 '<div class="table-wrap"><table class="data"><thead><tr><th>Bit</th><th>Tên</th><th>Ý nghĩa</th></tr></thead><tbody>' +
-'<tr><td><code>FDF</code></td><td>FD Format (trước gọi là EDL)</td><td>Phân biệt khung CAN FD với khung Classical CAN. Recessive = khung FD.</td></tr>' +
+'<tr><td><code>RRS</code></td><td>Remote Request Substitution</td><td>Nằm đúng vị trí bit RTR (Classical CAN) / SRR (Extended). CAN FD <strong>không có Remote Frame</strong>, nên RRS luôn phát <em>dominant (0)</em> — giữ đúng vai trò "RTR = 0 = Data Frame" để không bị các khung Classical CAN cùng ID đánh bại một cách vô lý trong arbitration.</td></tr>' +
+'<tr><td><code>FDF</code></td><td>FD Format (trước gọi là EDL)</td><td>Phân biệt khung CAN FD với khung Classical CAN. Recessive (1) = khung FD; dominant (0) = khung Classical CAN.</td></tr>' +
+'<tr><td><code>res</code></td><td>Reserved</td><td>Bit dự trữ, luôn phát dominant — đóng vai trò tương tự bit <code>r0</code> của Classical CAN, dành cho mở rộng giao thức trong tương lai.</td></tr>' +
 '<tr><td><code>BRS</code></td><td>Bit Rate Switch</td><td>Bật/tắt tốc độ cao cho pha dữ liệu (xem trên).</td></tr>' +
 '<tr><td><code>ESI</code></td><td>Error State Indicator</td><td>Cho biết node gửi đang ở trạng thái error-active (dominant) hay error-passive (recessive).</td></tr>' +
 '</tbody></table></div>' +
@@ -54,6 +56,7 @@
   bf("arb","1","RRS") +
   bf("ctrl","1","IDE") +
   bf("ctrl","1","FDF") +
+  bf("ctrl","1","res") +
   bf("ctrl","1","BRS") +
   bf("ctrl","1","ESI") +
   bf("ctrl","4","DLC") +
@@ -62,7 +65,34 @@
   bf("ack","2","ACK") +
   bf("eof","7","EOF") +
 '</div>' +
-'<p class="muted">Khung FD <strong>không có</strong> Remote Frame (RTR bị thay bằng RRS luôn dominant). Trường CRC dài hơn và mạnh hơn Classical CAN.</p>' +
+'<p class="muted">Thứ tự các bit điều khiển đúng theo đặc tả: <strong>FDF → res → BRS → ESI</strong>. Trường CRC dài hơn và mạnh hơn Classical CAN.</p>' +
+
+'<h3>Bố cục khung CAN FD — Extended (29-bit ID)</h3>' +
+'<p>CAN FD cũng có bản 29-bit, gọi là <strong>FD Extended Frame Format (FEFF)</strong>. Phần định danh dùng lại đúng cơ chế <strong>Base ID → SRR → IDE → ID mở rộng</strong> của <a href="#can-frame">Extended Frame cổ điển</a> (xem lại nếu chưa rõ SRR/IDE là gì). Khác biệt duy nhất: cổ điển có <em>RTR thật</em> ở cuối phần ID mở rộng để phân biệt Data/Remote Frame, còn CAN FD không có Remote Frame nên vị trí đó được thay bằng <strong>RRS</strong> — luôn dominant.</p>' +
+'<div class="bitfield">' +
+  bf("sof","1","SOF") +
+  bf("arb","11","Base ID") +
+  bf("arb","1","SRR") +
+  bf("ctrl","1","IDE") +
+  bf("arb","18","ID mở rộng") +
+  bf("arb","1","RRS") +
+  bf("ctrl","1","FDF") +
+  bf("ctrl","1","res") +
+  bf("ctrl","1","BRS") +
+  bf("ctrl","1","ESI") +
+  bf("ctrl","4","DLC") +
+  bf("data","0–512","Data (0–64 byte)") +
+  bf("crc","17/21","CRC") +
+  bf("ack","2","ACK") +
+  bf("eof","7","EOF") +
+'</div>' +
+'<div class="callout info">' + co("info") +
+'<div class="callout-body"><p><strong>Tóm gọn 4 biến thể ở đúng "vị trí RTR cũ":</strong></p><ul>' +
+'<li><strong>Classical Standard:</strong> RTR thật — <code>0</code> = Data Frame, <code>1</code> = Remote Frame.</li>' +
+'<li><strong>Classical Extended:</strong> SRR (giữ chỗ, luôn recessive) ngay ở vị trí đó, rồi <em>RTR thật</em> xuất hiện lại ở cuối 18 bit ID mở rộng.</li>' +
+'<li><strong>CAN FD Standard:</strong> RRS (luôn dominant) — không có RTR thật vì FD không có Remote Frame.</li>' +
+'<li><strong>CAN FD Extended:</strong> SRR (giữ chỗ, luôn recessive) ở đầu, rồi <em>RRS</em> (luôn dominant, thay cho RTR thật) ở cuối 18 bit ID mở rộng.</li>' +
+'</ul><p>Nói ngắn gọn: SRR luôn <em>thay chỗ</em> cho bit đứng ở vị trí Base ID/RTR, còn RTR hoặc RRS thật luôn nằm ở <em>cuối phần Identifier</em> (sau 18 bit mở rộng, nếu có) — hai bit này không phải là một, dù cùng \'gốc gác\' từ RTR.</p></div></div>' +
 
 '<h2><span class="h2-num">5</span>DLC trong CAN FD — chở nhiều hơn 8 byte</h2>' +
 '<p>CAN FD tái sử dụng các giá trị DLC 9–15 (vốn "vô nghĩa" trong Classical CAN) để biểu diễn các kích thước lớn:</p>' +
@@ -85,7 +115,7 @@
 '<tr><td>CRC</td><td>15-bit</td><td>17-bit / 21-bit</td></tr>' +
 '<tr><td>Remote Frame</td><td>Có</td><td><strong>Không</strong></td></tr>' +
 '<tr><td>Arbitration</td><td>Bitwise, phi phá hủy</td><td>Giống hệt (kế thừa)</td></tr>' +
-'<tr><td>Bit mới</td><td>—</td><td>FDF, BRS, ESI</td></tr>' +
+'<tr><td>Bit mới</td><td>—</td><td>RRS, FDF, res, BRS, ESI</td></tr>' +
 '</tbody></table></div>' +
 
 '<div class="callout warn">' + co("alert") +

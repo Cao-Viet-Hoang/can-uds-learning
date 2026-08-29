@@ -79,7 +79,7 @@
 '<div class="field" style="flex:0 0 90px"><label>Nhóm</label><select class="select" id="dtc-letter">' +
 LETTER.map(function(l){return '<option value="'+l+'"'+(l==="P"?" selected":"")+'>'+l+'</option>';}).join('') +
 '</select></div>' +
-'<div class="field"><label>4 chữ số hex còn lại <span class="hint">(chữ số 1 chỉ 0–3)</span></label><input class="input" id="dtc-rest" value="0301" maxlength="4" spellcheck="false" placeholder="0301"></div>' +
+'<div class="field"><label>4 chữ số hex còn lại</label><input class="input" id="dtc-rest" value="0301" maxlength="4" spellcheck="false" placeholder="0301"><span class="hint hint-block">Chữ số đầu chỉ nhận 0–3</span></div>' +
 '</div>' +
 '<div id="dtc-enc"></div>' +
 '</div></div>' +

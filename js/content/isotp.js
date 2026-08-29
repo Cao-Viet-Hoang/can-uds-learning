@@ -45,7 +45,7 @@
 '</tbody></table></div>' +
 
 '<h3>Consecutive Frame (CF)</h3>' +
-'<p>Byte 0 = <code>0x2N</code> với <code>N</code> = <strong>số thứ tự (sequence number)</strong> chạy vòng 0→15→0. Bên nhận dùng N để phát hiện mất/lộn khung. 7 byte còn lại là dữ liệu.</p>' +
+'<p>Byte 0 = <code>0x2N</code> với <code>N</code> = <strong>số thứ tự (sequence number)</strong>, bắt đầu từ 1 và chạy vòng 1→15→0→1... (ISO 15765-2 quy định CF đầu tiên luôn có N=1, không phải 0). Bên nhận dùng N để phát hiện mất/lộn khung. 7 byte còn lại là dữ liệu.</p>' +
 '<pre class="code"><span class="cmt"># Các consecutive frame nối tiếp nhau</span>\n<span class="n">21</span> 30 39 42 4E ...   <span class="cmt"># CF số 1</span>\n<span class="n">22</span> 34 35 36 ...      <span class="cmt"># CF số 2</span></pre>' +
 
 '<h2><span class="h2-num">3</span>Toàn bộ luồng một message dài</h2>' +

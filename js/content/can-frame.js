@@ -7,7 +7,7 @@
   APP.register("can-frame", {
     title: "Cấu trúc khung",
     icon: "layers",
-    keywords: "frame khung data remote error overload sof identifier rtr ide dlc crc ack eof ifs bit stuffing standard extended",
+    keywords: "frame khung data remote error overload sof identifier rtr ide srr r0 r1 dlc crc ack eof ifs bit stuffing standard extended",
     render: function () {
       return (
 '<span class="page-eyebrow">' + I("layers") + 'CAN Bus · Phần 3</span>' +
@@ -63,9 +63,36 @@
 '<p class="muted">Sau EOF còn có <strong>IFS</strong> (Inter-Frame Space) gồm tối thiểu 3 bit recessive, ngăn cách giữa các khung.</p>' +
 
 '<h2><span class="h2-num">3</span>Standard vs Extended (11-bit vs 29-bit)</h2>' +
-'<p>Khung <strong>Extended (CAN 2.0B)</strong> có Identifier dài <strong>29 bit</strong> = 11 bit (base ID) + 18 bit (extended ID). Nó dùng thêm bit <strong>SRR</strong> (thay chỗ RTR trong phần base, luôn recessive) và bit <strong>IDE = 1</strong>. Điều này cho không gian định danh lớn hơn nhiều (hơn 500 triệu ID), cần cho các giao thức như SAE J1939.</p>' +
+'<p>Chuẩn CAN 2.0 định nghĩa 2 khuôn dạng: <strong>Standard Frame (CAN 2.0A)</strong> ở trên với Identifier 11 bit, và <strong>Extended Frame (CAN 2.0B)</strong> với Identifier dài <strong>29 bit</strong> — cho không gian định danh lớn hơn nhiều (hơn 500 triệu ID), cần cho các giao thức như SAE J1939. Cả hai khuôn dạng phải cùng tồn tại được trên một bus, và arbitration luôn so bit theo cùng vị trí, nên khung Extended được thiết kế để <strong>11 bit đầu tiên trùng đúng vị trí</strong> của Identifier chuẩn, rồi mới "rẽ nhánh" thêm các bit và 18 bit ID còn lại.</p>' +
+'<h3>Bố cục khung Extended</h3>' +
+'<div class="bitfield">' +
+  bf("sof","1","SOF") +
+  bf("arb","11","Base ID") +
+  bf("arb","1","SRR") +
+  bf("ctrl","1","IDE") +
+  bf("arb","18","ID mở rộng") +
+  bf("arb","1","RTR") +
+  bf("ctrl","1","r1") +
+  bf("ctrl","1","r0") +
+  bf("ctrl","4","DLC") +
+  bf("data","0–64","Data (0–8 byte)") +
+  bf("crc","15","CRC") +
+  bf("crc","1","CRC del") +
+  bf("ack","1","ACK slot") +
+  bf("ack","1","ACK del") +
+  bf("eof","7","EOF") +
+'</div>' +
+'<p class="muted">Màu sắc giống chú thích ở mục 2. So với khung Standard, phần thay đổi nằm ở đúng chỗ RTR/IDE cũ: thêm <strong>SRR</strong>, giữ <strong>IDE</strong> (nay = 1), chèn <strong>18 bit ID mở rộng</strong>, rồi mới tới RTR thật và thêm 1 bit dự trữ <strong>r1</strong>.</p>' +
+'<div class="table-wrap"><table class="data"><thead><tr><th>Trường mới / khác</th><th>Bit</th><th>Ý nghĩa</th></tr></thead><tbody>' +
+'<tr><td><strong>Base ID</strong></td><td>11</td><td>11 bit đầu của định danh 29-bit (ID28…ID18), nằm <em>đúng vị trí</em> Identifier của Standard Frame — nhờ vậy hai loại khung so được bit với nhau khi cùng phát lên bus.</td></tr>' +
+'<tr><td><strong>SRR</strong> (Substitute Remote Request)</td><td>1</td><td>Nằm đúng vị trí bit RTR của Standard Frame, nhưng <em>luôn phát recessive (1)</em> và bản thân nó không mang ý nghĩa gì — vai trò duy nhất là "giữ chỗ" cho arbitration. Nhờ vậy nếu Base ID trùng nhau, một Standard Data Frame (RTR = 0, dominant) luôn <strong>thắng</strong> Extended Frame (SRR = 1, recessive) ngay tại bit này.</td></tr>' +
+'<tr><td><strong>IDE</strong> ở đây</td><td>1</td><td>Vẫn là bit Identifier Extension như ở Standard Frame, nhưng phát <code>1</code> (recessive) để báo "đây là khung Extended". Bit này đứng ngay sau SRR nên cũng tham gia arbitration: nếu hai khung hòa nhau ở SRR/RTR (ví dụ Standard đó là Remote Frame), Standard (IDE = 0, dominant) vẫn thắng Extended (IDE = 1, recessive) tại đây.</td></tr>' +
+'<tr><td><strong>ID mở rộng</strong></td><td>18</td><td>18 bit còn lại (ID17…ID0), ghép sau Base ID để tạo đủ 29 bit định danh.</td></tr>' +
+'<tr><td><strong>RTR</strong> (thật)</td><td>1</td><td>Giống hệt vai trò ở Standard Frame — <code>0</code> = Data Frame, <code>1</code> = Remote Frame — chỉ khác là đứng sau 18 bit ID mở rộng thay vì ngay sau 11 bit ID.</td></tr>' +
+'<tr><td><strong>r1</strong>, <strong>r0</strong></td><td>1 + 1</td><td>Hai bit dự trữ (reserved) trong phần Control Field, luôn phát dominant, dành cho mở rộng giao thức trong tương lai. Standard Frame chỉ có 1 bit dự trữ (r0); Extended Frame có thêm r1.</td></tr>' +
+'</tbody></table></div>' +
 '<div class="callout info">' + co("info") +
-'<div class="callout-body"><p>Khung 11-bit và 29-bit có thể cùng tồn tại trên một bus. Vì bit IDE nằm ngay sau phần base ID, khi arbitration, một khung chuẩn (IDE=0, dominant) sẽ <em>thắng</em> khung mở rộng (SRR/IDE=1, recessive) nếu 11 bit đầu bằng nhau.</p></div></div>' +
+'<div class="callout-body"><p><strong>Ví dụ arbitration cụ thể:</strong> một Standard Data Frame ID = <code>0x123</code> và một Extended Data Frame có Base ID = <code>0x123</code> (11 bit đầu giống hệt nhau). Cả hai hòa nhau suốt 11 bit ID. Đến bit kế tiếp: Standard phát <strong>RTR = 0</strong> (dominant, vì là Data Frame) trong khi Extended buộc phải phát <strong>SRR = 1</strong> (recessive) → Extended thua ngay tại đó, Standard tiếp tục chiếm bus. Nếu Standard đó lại là <em>Remote Frame</em> (RTR = 1, recessive) thì hai bên hòa tiếp một nhịp nữa, và Extended chỉ thua ở bit kế — <strong>IDE</strong>: Standard phát 0 (dominant), Extended phát 1 (recessive). Nói cách khác: <em>khung Standard luôn thắng khung Extended có cùng Base ID</em>, chỉ khác nhau ở việc thua sớm (tại SRR) hay muộn hơn một bit (tại IDE).</p></div></div>' +
 
 '<h2><span class="h2-num">4</span>DLC — mã hóa độ dài dữ liệu</h2>' +
 '<p>Trong Classical CAN, DLC 4 bit mã hóa số byte 0–8. Các giá trị 9–15 vẫn được hiểu là 8 byte.</p>' +

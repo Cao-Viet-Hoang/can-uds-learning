@@ -653,6 +653,10 @@ pre.code .s { color: var(--c-green); }
 .field { margin-bottom: 16px; }
 .field label { display: block; font-size: var(--fs-base); font-weight: 500; color: var(--text); margin-bottom: 6px; }
 .field .hint { font-weight: 400; color: var(--text-muted); font-size: var(--fs-sm); }
+/* For a hint too long to sit inline next to the label without wrapping mid-
+   phrase (e.g. next to a short sibling label in a .field-row): drop it below
+   the input instead of forcing a break inside the label line. */
+.field .hint.hint-block { display: block; margin-top: 6px; }
 .input, .select, .textarea {
   width: 100%; height: 40px; padding: 0 12px; font-size: var(--fs-base);
   background: var(--bg); border: 1px solid var(--border-strong); border-radius: 8px;
@@ -664,7 +668,16 @@ pre.code .s { color: var(--c-green); }
   background-repeat: no-repeat; background-position: right 10px center; background-size: 17px; padding-right: 34px; }
 .input:focus, .select:focus, .textarea:focus { outline: none; border-color: var(--c-brand); box-shadow: var(--ring); background: var(--bg-elev); }
 .input.invalid { border-color: var(--c-red); box-shadow: 0 0 0 3px var(--c-red-soft); }
-.field-row { display: flex; gap: 12px; flex-wrap: wrap; }
+/* align-items: flex-start, not the flex default (stretch): both position the
+   content at the row's top edge the same way, but explicit flex-start makes
+   that guarantee independent of whichever sibling's box ends up tallest —
+   e.g. one field carrying a .hint-block note below its input while its
+   neighbour doesn't. Bottom-aligning (flex-end) was tried and rejected: it
+   lines up the *boxes'* bottom edges, which drags a shorter field's label
+   down whenever a sibling has trailing content after its control. As long as
+   every .field's own label is a single line, flex-start keeps every control
+   on the same row regardless of what follows it. */
+.field-row { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 .field-row .field { flex: 1; min-width: 120px; }
 
 .switch-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
@@ -745,16 +758,18 @@ pre.code .s { color: var(--c-green); }
   border-left: 2px solid var(--border);
   font-size: var(--fs-xs); color: var(--text-muted);
 }
-.lf-row { display: flex; gap: 10px; padding: 1px 0; }
+.lf-row { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 1px 0; }
 .lf-id { flex: 0 0 46px; color: var(--c-purple); }
 .lf-t  { flex: 0 0 26px; font-weight: 600; }
-.lf-b  { flex: 0 0 auto; color: var(--text-soft); }
-.lf-n  { font-family: var(--font-sans); opacity: .8; }
+.lf-b  { flex: 0 1 auto; color: var(--text-soft); }
+/* Needs its own min-width: as a bare flex item it inherits `word-break:
+   break-word` from the ancestor .log-msg, and a shrinking flex item with
+   break-word can collapse its min-content size down to a single character —
+   which rendered this note one letter per line instead of wrapping on
+   whitespace. Resetting word-break here + a floor width makes it wrap (or
+   drop to its own line via flex-wrap) like normal text instead. */
+.lf-n  { flex: 1 1 160px; min-width: 160px; word-break: normal; overflow-wrap: normal; font-family: var(--font-sans); opacity: .8; }
 .console.hide-frames .log-frames { display: none; }
-@media (max-width: 560px) {
-  .lf-row { flex-wrap: wrap; gap: 4px 10px; }
-  .lf-n { flex: 1 0 100%; }
-}
 
 /* A result block sits inside a .lab-panel that already has a border and a
    titled head. Wrapping it in a second filled, bordered box was box-in-box —
@@ -795,9 +810,10 @@ pre.code .s { color: var(--c-green); }
 }
 .bit-group:last-child { border-right: none; padding-right: 0; }
 .bit-group-bits { display: flex; gap: 2px; }
-/* Toggle only hides the label chip — .bit-group's border-right divider
-   stays, so field boundaries are still readable with labels off. */
-.bitstream.hide-labels .bit-group-label { display: none; }
+/* Toggle only hides the label chip — the group's border-right divider
+   stays, so field boundaries are still readable with labels off. Kept
+   generic so the CAN FD frame map can reuse the same toggle. */
+.hide-labels .bit-group-label { display: none; }
 .bit-group-label {
   font-family: var(--font-sans); font-size: 10px; font-weight: 600;
   text-transform: uppercase; letter-spacing: .03em; line-height: 1;
@@ -818,6 +834,19 @@ pre.code .s { color: var(--c-green); }
 .bit.b0 { background: var(--dominant); color: var(--bg); }        /* dominant */
 .bit.b1 { background: var(--recessive); color: var(--text); }
 .bit.stuffed { outline: 2px dashed var(--c-amber); outline-offset: 1px; }
+/* CAN FD only: fixed stuff bits sit at known positions rather than breaking
+   up a run, so they get their own marker to distinguish them from dynamic ones. */
+.bit.fixed { outline: 2px dotted var(--c-blue); outline-offset: 1px; }
+/* CAN FD splits one frame across two bit rates. Each phase gets its own rail
+   so the point where BRS switches the bus to the data rate is visible as a
+   break in the stream, not just a column in a table. */
+.fd-phase { border-left: 3px solid var(--border-strong); padding-left: 12px; margin-top: 14px; }
+.fd-phase.fast { border-left-color: var(--c-amber); }
+.fd-phase-cap {
+  font-family: var(--font-sans); font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted);
+}
+.fd-phase.fast .fd-phase-cap { color: var(--c-amber); }
 .bit-legend { display: flex; gap: 16px; margin-top: 12px; font-size: var(--fs-sm); color: var(--text-muted); flex-wrap: wrap; }
 .bit-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .bit-legend .swatch { width: 13px; height: 13px; border-radius: 3px; }
@@ -826,7 +855,7 @@ pre.code .s { color: var(--c-green); }
    is sized to the three hex characters it accepts instead of stretching to
    640px, which read as an invitation to type a paragraph. */
 .node-head, .node-row {
-  display: grid; grid-template-columns: 150px 110px 165px 36px; gap: 10px; align-items: center;
+  display: grid; grid-template-columns: minmax(0,1fr) 108px 148px 150px 36px; gap: 10px; align-items: center;
 }
 @media (max-width: 560px) {
   .node-head { display: none; }
@@ -848,7 +877,22 @@ pre.code .s { color: var(--c-green); }
 .arb-table td.d { background: var(--dominant); color: var(--bg); font-weight: 600; }
 .arb-table td.r { background: var(--recessive); color: var(--text); }
 .arb-table td.lost { opacity: .22; }
+/* Columns a node no longer drives: a Standard frame leaves the arbitration
+   field at IDE, so its remaining cells are blank rather than a bit value. */
+.arb-table td.na { background: none; color: var(--text-soft); opacity: .35; }
 .arb-table tr.winner th { color: var(--c-green); font-weight: 700; }
+/* Frame format sits next to the node name so the 11-bit vs 29-bit rows stay
+   distinguishable once the two formats are interleaved in one table. */
+.arb-table .arb-fmt {
+  display: block; font-size: 10px; font-weight: 400; letter-spacing: .02em;
+  color: var(--text-soft); line-height: 1.3;
+}
+/* Mixed Standard/Extended runs are 32 bit-columns wide. Tighten the header
+   padding and cell width so the table scrolls a little instead of a lot. */
+.arb-table.wide td, .arb-table.wide th { width: 22px; height: 24px; }
+.arb-table.wide th { padding: 4px 2px; font-size: 10px; }
+.arb-table.wide th:first-child { padding: 4px 10px 4px 0; width: auto; }
+.arb-table.wide td:last-child, .arb-table.wide th:last-child { width: auto; padding: 0 0 0 12px; }
 /* Status column holds a badge, not a bit — let it size to its text instead of
    wrapping "Đang tranh" onto two lines and blowing out the row height, and
    left-align it: centred badges of three different widths made a ragged column. */
