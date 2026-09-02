@@ -290,8 +290,8 @@ rows([
 '<p>Trên <strong>CAN FD</strong>, một Single Frame có thể chứa tới 62 byte (vì payload 64 byte), nên nhiều message UDS không cần phân mảnh nữa; First Frame cũng có escape length riêng cho message &gt;4095 byte (mục 2). Các cơ chế nâng cao khác đã nhắc tới ở trên: timeout N_As/N_Bs/N_Cr/N_Ar (mục 5), Flow Status "Wait"/"Overflow" (mục 2), và extended/mixed addressing (mục 6). Tất cả đều là biến thể của đúng 4 loại khung PCI cốt lõi — nắm chắc phần cốt lõi trước khi đào sâu các biến thể này.</p></div></div>' +
 
 '<div class="next-up">' + I("arrowRight") +
-'<div class="nu-body"><span class="nu-label">Hoàn thành phần lý thuyết!</span>' +
-'<p>Bạn đã đi hết chặng đường từ bit trên dây (CAN) đến câu lệnh chẩn đoán (UDS). Giờ là lúc thực hành: hãy mở nhóm <a href="#lab-can">Labs</a> để tự tay dựng khung, chạy arbitration và gửi request tới ECU ảo.</p></div></div>' +
+'<div class="nu-body"><span class="nu-label">Tiếp theo</span>' +
+'<p>Bạn đã hiểu đúng luật chơi ISO-TP ở mức byte. Nhưng trong một ECU thật, ai là người thực thi những quy tắc đó? Xem <a href="#autosar-routing">AUTOSAR — Routing message</a> để biết CanTp, PduR, Dcm, CanIf… phối hợp với nhau ra sao, rồi mở nhóm <a href="#lab-can">Labs</a> để tự tay thực hành.</p></div></div>' +
 
 '</div>'
       );

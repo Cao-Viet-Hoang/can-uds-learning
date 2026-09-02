@@ -72,7 +72,7 @@
     { label: "Bắt đầu", icon: "compass", items: ["intro"] },
     { label: "CAN Bus", icon: "network", items: ["can-basics", "can-physical", "can-frame", "can-arbitration", "can-errors"] },
     { label: "CAN FD", icon: "zap", items: ["canfd"] },
-    { label: "UDS Diagnostics", icon: "message", items: ["uds-intro", "uds-format", "uds-services", "uds-security", "isotp"] },
+    { label: "UDS Diagnostics", icon: "message", items: ["uds-intro", "uds-format", "uds-services", "uds-security", "isotp", "autosar-routing"] },
     { label: "Thực hành (Labs)", icon: "flask", items: ["lab-can", "lab-arbitration", "lab-canfd", "lab-uds", "lab-dtc"] }
   ];
 
