@@ -95,9 +95,9 @@
 '<div class="btn-row"><button class="btn primary" id="uds-send">' + I("send") + 'Gửi request</button></div>' +
 
 '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0">' +
-'<div class="field"><label>Hoặc nhập raw hex <span class="hint">(vd: 22 F1 90)</span></label>' +
-'<div class="field-row"><input class="input" id="uds-raw" placeholder="22 F1 90" spellcheck="false" style="flex:1">' +
-'<button class="btn" id="uds-sendraw" style="flex:0 0 auto">' + I("send") + 'Gửi</button></div></div>' +
+'<div class="field"><label>Hoặc nhập raw hex <span class="hint">(mỗi dòng 1 lệnh, gửi lần lượt — Ctrl+Enter để gửi nhanh)</span></label>' +
+'<textarea class="textarea" id="uds-raw" placeholder="22 F1 90&#10;10 03&#10;3E 00" spellcheck="false" rows="3"></textarea>' +
+'<div class="btn-row" style="margin-top:8px"><button class="btn" id="uds-sendraw">' + I("send") + 'Gửi tất cả</button></div></div>' +
 '</div></div>' +
 
 // ---- right: console ----
@@ -438,9 +438,12 @@
         $("#uds-send").disabled = b;
         $("#uds-sendraw").disabled = b;
       }
-      function send(req) {
-        if (busy) { log("SYS", "", "ECU đang bận (vừa trả 0x78 responsePending) — chờ response cuối cùng."); return; }
-        if (!req.length) { log("SYS", "", "Request rỗng, bỏ qua."); return; }
+      // cb (optional) fires once this request's full cycle is done — including
+      // the responsePending wait — so callers can chain requests one at a time
+      // instead of firing them all before the ECU has answered.
+      function send(req, cb) {
+        if (busy) { log("SYS", "", "ECU đang bận (vừa trả 0x78 responsePending) — chờ response cuối cùng."); if (cb) cb(); return; }
+        if (!req.length) { log("SYS", "", "Request rỗng, bỏ qua."); if (cb) cb(); return; }
         logPdu("TX", req, describeReq(req));
         var r = handle(req);
         // Reload S3 *after* handling: a 10 03 only starts the timer because the
@@ -456,6 +459,7 @@
             pendTimer = null; setBusy(false);
             logPdu("RX", r.resp, r.note);
             kickS3(); renderStatus();
+            if (cb) cb();
           }, PENDING_MS);
           renderStatus();
           return;
@@ -464,6 +468,22 @@
         else if (r.neg)         logPdu("ERR", r.resp, negNote(r));
         else                    logPdu("RX", r.resp, r.note);
         renderStatus();
+        if (cb) cb();
+      }
+
+      // Sends each non-empty line of a raw-hex textarea as its own request,
+      // waiting for the previous one's full cycle (including any 0x78 pending
+      // wait) before firing the next — otherwise a batch would race the ECU's
+      // busy flag and most lines would just get dropped as "đang bận".
+      function sendBatch(text) {
+        var lines = String(text||"").split(/\r?\n/).map(function(l){return parseHex(l);}).filter(function(b){return b.length;});
+        if (!lines.length) { log("SYS", "", "Không có lệnh hợp lệ nào để gửi."); return; }
+        var i = 0;
+        (function next(){
+          if (i >= lines.length) return;
+          var req = lines[i++];
+          send(req, next);
+        })();
       }
 
       // ---------------- S3 session timer ----------------
@@ -582,8 +602,11 @@
       // ---------------- events ----------------
       svc.addEventListener("change", renderParams);
       $("#uds-send").addEventListener("click", function(){ send(assembleReq()); });
-      $("#uds-sendraw").addEventListener("click", function(){ send(parseHex($("#uds-raw").value)); });
-      $("#uds-raw").addEventListener("keydown", function(e){ if(e.key==="Enter") send(parseHex($("#uds-raw").value)); });
+      $("#uds-sendraw").addEventListener("click", function(){ sendBatch($("#uds-raw").value); });
+      // Enter alone must stay a newline (multi-line input); Ctrl/Cmd+Enter sends the batch.
+      $("#uds-raw").addEventListener("keydown", function(e){
+        if (e.key==="Enter" && (e.ctrlKey||e.metaKey)) { e.preventDefault(); sendBatch($("#uds-raw").value); }
+      });
       $("#uds-clear").addEventListener("click", function(){ logEl.innerHTML=""; });
       $("#uds-reset").addEventListener("click", function(){
         if (pendTimer) { clearTimeout(pendTimer); pendTimer = null; }
