@@ -43,13 +43,58 @@ serviceTable() +
 '<p class="muted">Dải <code>0xF1xx</code> phần lớn là DID định danh chuẩn hóa; các hãng còn định nghĩa DID riêng trong những dải khác.</p>' +
 
 '<h2><span class="h2-num">4</span>DTC — mã lỗi chẩn đoán</h2>' +
-'<p>Dịch vụ <code>0x19 ReadDTCInformation</code> đọc <strong>DTC (Diagnostic Trouble Code)</strong>. Mỗi DTC gồm mã lỗi (thường 3 byte) + 1 byte <em>status</em> mô tả trạng thái (đang lỗi, đã từng lỗi, chưa xác nhận…). Dịch vụ này có nhiều sub-function, phổ biến nhất:</p>' +
+'<p><strong>DTC (Diagnostic Trouble Code)</strong> là mã mà ECU tự lưu vào bộ nhớ khi một phép kiểm tra chẩn đoán (diagnostic test/monitor) bên trong phần mềm của nó phát hiện điều kiện bất thường — ví dụ điện áp cảm biến vượt ngoài dải cho phép, hoặc mất tín hiệu từ một module khác. ECU không "hỏi" DTC — nó tự phát hiện và lưu; dịch vụ <code>0x19 ReadDTCInformation</code> chỉ dùng để <em>đọc lại</em> những gì ECU đã ghi nhận.</p>' +
+
+'<h3>4.1 Một bản ghi DTC gồm những gì?</h3>' +
+'<p>Khi tester gửi <code>0x19</code> với sub-function <code>0x02 reportDTCByStatusMask</code>, request và response có cấu trúc sau:</p>' +
+'<div class="table-wrap"><table class="data"><thead><tr><th>Hướng</th><th>Bytes</th><th>Giải nghĩa</th></tr></thead><tbody>' +
+'<tr><td>Request</td><td class="mono">19 02 &lt;mask&gt;</td><td>SID 0x19, sub-function 0x02, <strong>DTCStatusMask</strong> (1 byte) — chỉ những DTC có ít nhất 1 bit status khớp với mask này mới được liệt kê trong response.</td></tr>' +
+'<tr><td>Response</td><td class="mono">59 02 &lt;statusAvailabilityMask&gt; [bản ghi DTC #1] [bản ghi DTC #2] …</td><td>0x59 (=0x19+0x40), lặp lại sub-function, rồi <strong>statusAvailabilityMask</strong> (1 byte, xem 4.4), rồi 0 hoặc nhiều bản ghi DTC nối tiếp nhau.</td></tr>' +
+'</tbody></table></div>' +
+'<p>Mỗi <strong>bản ghi DTC</strong> (DTCAndStatusRecord) dài đúng <strong>4 byte</strong>:</p>' +
+'<div class="bitfield">' +
+'<div class="bf-cell arb" style="flex:0 0 auto"><div class="bf-bits">byte 0</div><div class="bf-name">DTCHighByte</div></div>' +
+'<div class="bf-cell ctrl" style="flex:0 0 auto"><div class="bf-bits">byte 1</div><div class="bf-name">DTCMiddleByte</div></div>' +
+'<div class="bf-cell data" style="flex:0 0 auto"><div class="bf-bits">byte 2</div><div class="bf-name">DTCLowByte</div></div>' +
+'<div class="bf-cell crc" style="flex:0 0 auto"><div class="bf-bits">byte 3</div><div class="bf-name">statusOfDTC</div></div>' +
+'</div>' +
+'<p><strong>3 byte đầu (High + Middle + Low) hợp lại chính là "DTC"</strong> theo nghĩa ISO 14229; byte thứ 4 là status. Ví dụ bản ghi <code class="mono">01 33 00 09</code> = DTC <code>0x013300</code> + status <code>0x09</code>.</p>' +
+
+'<h3>4.2 Đọc 2 byte đầu ra mã dạng chữ (SAE J2012)</h3>' +
+'<p><strong>DTCHighByte + DTCMiddleByte</strong> (2 byte, 16 bit) chính là con số bạn cần để suy ra mã quen thuộc dạng <code>P0301</code>, <code>C0035</code>… theo <strong>SAE J2012</strong>. Cách tách 16 bit đó:</p>' +
+'<div class="table-wrap"><table class="data"><thead><tr><th>Vị trí bit</th><th>Số bit</th><th>Ý nghĩa</th></tr></thead><tbody>' +
+'<tr><td>15–14</td><td>2</td><td>Nhóm hệ thống: <code>00</code>=P (Powertrain), <code>01</code>=C (Chassis), <code>10</code>=B (Body), <code>11</code>=U (Network/mạng giao tiếp).</td></tr>' +
+'<tr><td>13–12</td><td>2</td><td>Chữ số đầu tiên sau chữ cái (0–3). Với nhóm P: <code>0</code> và <code>2</code> = ISO/SAE chuẩn hoá, <code>1</code> = do hãng tự định nghĩa, <code>3</code> = dùng chung (P30xx–P33xx do hãng, P34xx–P39xx theo ISO/SAE). Với C/B/U: <code>0</code> = ISO/SAE chuẩn hoá, <code>1</code>/<code>2</code> = do hãng định nghĩa, <code>3</code> = dành riêng.</td></tr>' +
+'<tr><td>11–0</td><td>12 (3 nibble)</td><td>Ba chữ số hex còn lại của mã, lấy nguyên dạng.</td></tr>' +
+'</tbody></table></div>' +
+'<p class="muted">Ví dụ: <code>03 01</code> = nhị phân <code>0000 0011 0000 0001</code> → 2 bit đầu <code>00</code> = P, 2 bit kế <code>00</code> = chữ số 1 là <code>0</code>, 3 nibble còn lại <code>3</code>, <code>0</code>, <code>1</code> → <strong>P0301</strong> (Cylinder 1 Misfire Detected). Tự thử với các giá trị khác ở <a href="#lab-dtc">Lab: DTC Decoder</a>.</p>' +
+
+'<h3>4.3 Byte thứ 3 — DTCLowByte</h3>' +
+'<p><strong>DTCLowByte</strong> (byte thứ 3 của DTC, đôi khi được gọi là <em>Failure Type Byte</em>) không nằm trong mã SAE J2012 4 chữ số ở trên. Nó mô tả <em>kiểu lỗi</em> cụ thể hơn — ví dụ hở mạch (open circuit), ngắn mạch xuống mass, tín hiệu ngoài dải hợp lý… Ý nghĩa chi tiết của byte này tuỳ theo cách từng hãng/ECU triển khai; nhiều ECU đặt sẵn <code>0x00</code> nếu không phân biệt kiểu lỗi. Vì vậy khi đọc log, hai byte đầu (High+Middle) mới là thứ quyết định "đây là lỗi gì" theo mã chuẩn; byte thứ 3 chỉ bổ sung chi tiết nếu có.</p>' +
+
+'<h3>4.4 Status byte — 8 lá cờ (bit) trạng thái</h3>' +
+'<p>Byte cuối cùng của mỗi bản ghi (<code>statusOfDTC</code>) là một tập 8 bit độc lập, mỗi bit là 1 lá cờ true/false theo ISO 14229-1:</p>' +
+'<div class="table-wrap"><table class="data"><thead><tr><th>Bit</th><th>Tên</th><th>Ý nghĩa</th></tr></thead><tbody>' +
+'<tr><td><code>0</code></td><td class="mono">testFailed</td><td>Lần chạy test gần nhất phát hiện lỗi (đang lỗi ngay lúc test đó).</td></tr>' +
+'<tr><td><code>1</code></td><td class="mono">testFailedThisOperationCycle</td><td>Đã lỗi ít nhất 1 lần trong chu kỳ hoạt động hiện tại (từ lúc bật đến giờ).</td></tr>' +
+'<tr><td><code>2</code></td><td class="mono">pendingDTC</td><td>Lỗi mới phát hiện, đang chờ — chưa đủ điều kiện để ECU coi là lỗi "chắc chắn".</td></tr>' +
+'<tr><td><code>3</code></td><td class="mono">confirmedDTC</td><td>Lỗi đã được xác nhận và lưu persistent (không mất khi tắt máy) theo chiến lược chẩn đoán của ECU.</td></tr>' +
+'<tr><td><code>4</code></td><td class="mono">testNotCompletedSinceLastClear</td><td>Kể từ lần xoá DTC gần nhất, phép test này chưa từng chạy xong.</td></tr>' +
+'<tr><td><code>5</code></td><td class="mono">testFailedSinceLastClear</td><td>Kể từ lần xoá DTC gần nhất, đã từng lỗi ít nhất 1 lần (dù hiện tại có thể đã hết lỗi).</td></tr>' +
+'<tr><td><code>6</code></td><td class="mono">testNotCompletedThisOperationCycle</td><td>Trong chu kỳ hoạt động hiện tại, phép test này chưa chạy xong (chưa có kết luận).</td></tr>' +
+'<tr><td><code>7</code></td><td class="mono">warningIndicatorRequested</td><td>ECU yêu cầu bật đèn cảnh báo trên táp-lô (ví dụ đèn Check Engine/MIL).</td></tr>' +
+'</tbody></table></div>' +
+'<p>Vì đây là 8 lá cờ độc lập (không phải 1 con số để so sánh lớn/nhỏ), một status byte có thể bật nhiều bit cùng lúc. Ví dụ <code>0x09</code> = nhị phân <code>0000 1001</code> = bit 0 (<code>testFailed</code>) + bit 3 (<code>confirmedDTC</code>) cùng bật → "đang lỗi ngay bây giờ, và lỗi này đã được xác nhận". Bạn có thể tự giải mã bất kỳ status byte nào ở <a href="#lab-dtc">Lab: DTC Decoder</a>.</p>' +
+'<div class="callout info">' + co("info") +
+'<div class="callout-body"><p><strong>DTCStatusMask (request) khác statusAvailabilityMask (response):</strong> mask trong request là bộ lọc do tester chọn (chỉ liệt kê DTC có ít nhất 1 bit khớp mask). Còn <code>statusAvailabilityMask</code> trong response cho biết <em>ECU này thực sự dùng những bit nào trong 8 bit trên</em> — không phải ECU nào cũng cài đặt đủ cả 8 lá cờ.</p></div></div>' +
+
+'<h3>4.5 Các sub-function thường gặp của 0x19</h3>' +
 '<ul>' +
 '<li><code>0x02 reportDTCByStatusMask</code>: liệt kê DTC khớp với một mặt nạ trạng thái (ví dụ chỉ lấy DTC "confirmed").</li>' +
-'<li><code>0x01 reportNumberOfDTCByStatusMask</code>: đếm số DTC khớp mặt nạ.</li>' +
-'<li><code>0x0A reportSupportedDTC</code>: liệt kê mọi DTC mà ECU hỗ trợ.</li>' +
+'<li><code>0x01 reportNumberOfDTCByStatusMask</code>: chỉ đếm số DTC khớp mặt nạ, không liệt kê chi tiết.</li>' +
+'<li><code>0x0A reportSupportedDTC</code>: liệt kê mọi DTC mà ECU có khả năng phát hiện (không lọc theo status).</li>' +
 '</ul>' +
-'<p>Định dạng mã DTC dạng chữ (P/C/B/U) theo <strong>SAE J2012</strong> — bạn có thể giải mã ở <a href="#lab-dtc">Lab: DTC Decoder</a>.</p>' +
+'<p>Ở chiều ngược lại, <code>0x14 ClearDiagnosticInformation</code> xoá DTC đã lưu. Tham số đi kèm là <strong>groupOfDTC</strong> — một giá trị 3 byte cùng kích thước với DTC ở trên; giá trị đặc biệt <code>0xFFFFFF</code> nghĩa là "xoá tất cả các nhóm DTC" (xem ví dụ đầy đủ ở mục 6.2 bên dưới).</p>' +
 
 '<h2><span class="h2-num">5</span>RoutineControl (0x31)</h2>' +
 '<p>Dịch vụ <code>0x31</code> cho phép chạy một "thủ tục" định sẵn trong ECU (ví dụ tự kiểm tra, hiệu chỉnh, xóa vùng nhớ). Nó có 3 sub-function:</p>' +
@@ -76,7 +121,7 @@ seqTable([
 '<h3>6.2 Chẩn đoán lỗi &amp; xoá sau khi sửa xong</h3>' +
 '<p>Quy trình chuẩn của kỹ thuật viên: đọc DTC để biết ECU đang báo lỗi gì, sửa/thay phần cứng, rồi xoá DTC và đọc lại để xác nhận đã sạch.</p>' +
 seqTable([
-  ["1","Đọc DTC đang \"confirmed\" hoặc đang lỗi","<span class=\"mono\">19 02 09</span>","<span class=\"mono\">59 02 09 01 33 09</span>","Mask 0x09 = bit0 (testFailed) + bit3 (confirmedDTC). DTC <span class=\"mono\">01 33</span> ứng với mã OBD-II chuẩn <strong>P0133</strong> (O2 Sensor Circuit Slow Response); status <span class=\"mono\">09</span> = 0000&nbsp;1001₂ = testFailed + confirmedDTC."],
+  ["1","Đọc DTC đang \"confirmed\" hoặc đang lỗi","<span class=\"mono\">19 02 09</span>","<span class=\"mono\">59 02 09 01 33 00 09</span>","DTCStatusMask 0x09 = bit0 (testFailed) + bit3 (confirmedDTC). Bản ghi DTC <span class=\"mono\">01 33 00 09</span> (mục 4.1): DTCHighByte+DTCMiddleByte <span class=\"mono\">01 33</span> ứng với mã chuẩn <strong>P0133</strong> (O2 Sensor Circuit Slow Response), DTCLowByte <span class=\"mono\">00</span> (không phân biệt kiểu lỗi), status <span class=\"mono\">09</span> = 0000&nbsp;1001₂ = testFailed + confirmedDTC."],
   ["2","<em>(Kỹ thuật viên thay cảm biến, không phải gói tin UDS)</em>","—","—","Đây là bước sửa chữa vật lý, không có giao dịch trên bus."],
   ["3","Xoá toàn bộ DTC","<span class=\"mono\">14 FF FF FF</span>","<span class=\"mono\">54</span>","groupOfDTC=0xFFFFFF nghĩa là xoá tất cả nhóm DTC. Positive response 0x54 không kèm dữ liệu."],
   ["4","Đọc lại với cùng mask để xác nhận sạch","<span class=\"mono\">19 02 09</span>","<span class=\"mono\">59 02 00</span>","statusAvailabilityMask trả về 0x00 và không còn bản ghi DTC nào theo sau → xác nhận đã xoá sạch."]
